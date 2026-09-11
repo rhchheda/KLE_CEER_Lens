@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KLE CEER Lens · Photo Portal</title>
+  <meta name="description" content="Division, faculty & timeline photo portal for KLE-C-SHInE Engineering Exploration." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,600&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #0d1b3e; --navy-2: #182b55; --gold: #c9a84c; --gold-2: #ead282;
+      --ink: #13203c; --muted: #68758f; --line: rgba(13,27,62,0.12);
+      --paper: #ffffff; --soft: #f5f1e8; --wash: #eef3f8;
+      --green: #1f7a4d; --red: #c24035; --blue: #226da8;
+      --shadow: 0 18px 45px rgba(13,27,62,0.12);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Outfit, system-ui, sans-serif; color: var(--ink);
+      background: var(--soft); min-height: 100vh; padding-bottom: 64px; }
+    button, input, select, textarea { font: inherit; }
+    button, .kpi, .thumb { cursor: pointer; }
+    img { max-width: 100%; }
+
+    /* ---------- LOADING ---------- */
+    .loading { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+      background: var(--navy); color: #fff; transition: opacity .4s ease; }
+    .loading.hidden { opacity: 0; pointer-events: none; }
+    .loading-box { text-align: center; }
+    .loading-logo { font-family: "Cormorant Garamond", serif; font-size: 40px; font-weight: 600; }
+    .loading-logo span { color: var(--gold); font-style: italic; }
+    .loading-text { margin-top: 12px; color: rgba(255,255,255,.55); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+    .loading-rings { position: relative; width: 86px; height: 86px; margin: 0 auto 18px; }
+    .loading-rings::before, .loading-rings::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid transparent; border-top-color: var(--gold); border-right-color: rgba(234,210,130,.55); animation: spin 1.4s linear infinite; }
+    .loading-rings::after { inset: 12px; border-top-color: rgba(255,255,255,.72); animation-duration: 1.9s; animation-direction: reverse; }
+    .loading-dot { position: absolute; inset: 31px; border-radius: 50%; background: var(--gold);
+      box-shadow: 0 0 26px rgba(201,168,76,.65); animation: pulse 1.25s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { transform: scale(.78); opacity: .65; } 50% { transform: scale(1); opacity: 1; } }
+
+    /* ---------- LOGIN ---------- */
+    .login-screen { position: fixed; inset: 0; z-index: 50; display: none; place-items: center;
+      background: linear-gradient(135deg, rgba(13,27,62,.96), rgba(24,43,85,.92)),
+        radial-gradient(circle at 20% 20%, rgba(201,168,76,.18), transparent 30%); color: #fff; padding: 20px; }
+    .login-screen.show { display: grid; }
+    .login-card { width: min(430px,100%); border: 1px solid rgba(201,168,76,.32); border-radius: 12px;
+      background: rgba(255,255,255,.08); box-shadow: 0 28px 70px rgba(0,0,0,.24); padding: 38px; backdrop-filter: blur(14px);
+      animation: riseIn .5s ease both; }
+    .login-title { font-family: "Cormorant Garamond", serif; font-size: 34px; line-height: 1.05; }
+    .login-title span { color: var(--gold-2); font-style: italic; }
+    .login-copy { color: rgba(255,255,255,.62); margin: 10px 0 22px; line-height: 1.55; font-size: 13.5px; }
+    .field { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 10px 12px; min-height: 40px; color: var(--ink); width: 100%; }
+    .field:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+    .login-card .field { margin-top: 10px; }
+    .btn-gold { border: 1px solid var(--gold); background: var(--gold); color: var(--navy); border-radius: 8px; padding: 10px 16px; font-weight: 700; transition: all .2s; }
+    .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(201,168,76,.3); }
+    .btn-ghost { border: 1px solid var(--line); background: #fff; color: var(--navy); border-radius: 8px; padding: 10px 14px; }
+    .login-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; }
+    .login-error { color: #ffb8b8; min-height: 18px; font-size: 13px; }
+
+    /* ---------- TOPBAR ---------- */
+    .app { display: none; }
+    .app.show { display: block; }
+    .topbar { position: sticky; top: 0; z-index: 20; background: rgba(13,27,62,.96); color: #fff;
+      border-bottom: 1px solid rgba(201,168,76,.24); backdrop-filter: blur(10px); }
+    .topbar-inner { max-width: 1240px; margin: 0 auto; padding: 11px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .mark { width: 60px; height: 60px; border: 1px solid rgba(201,168,76,.7); display: grid; place-items: center;
+      color: var(--gold-2); font-family: "Cormorant Garamond", serif; font-size: 24px; font-weight: 600; border-radius: 9px; overflow: hidden; flex: none; }
+    .mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .mark.has-logo { background: #fff; border-color: rgba(255,255,255,.42); padding: 5px; }
+    .mark.wide { width: auto; height: 54px; max-width: 220px; padding: 6px 12px; }
+    .mark.wide img { width: auto; height: 100%; }
+    .brand-name { font-size: 17px; font-weight: 700; }
+    .brand-sub { color: rgba(255,255,255,.5); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
+    .who { display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,.8); font-size: 12.5px; }
+    .who b { color: var(--gold-2); }
+    .who .role { border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 3px 9px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+    .who button { border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: rgba(255,255,255,.85); border-radius: 8px; padding: 6px 11px; font-size: 12px; }
+
+    /* ---------- HERO ---------- */
+    .hero { background: linear-gradient(90deg, rgba(13,27,62,.97), rgba(24,43,85,.7)); color: #fff; position: relative; overflow: hidden; }
+    .hero::before { content: ""; position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(201,168,76,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(201,168,76,.07) 1px, transparent 1px);
+      background-size: 46px 46px; opacity: .7; }
+    .hero-inner { position: relative; max-width: 1240px; margin: 0 auto; padding: 34px 18px 26px; }
+    .eyebrow { color: var(--gold-2); letter-spacing: .14em; text-transform: uppercase; font-size: 11.5px; font-weight: 700; }
+    h1 { font-family: "Cormorant Garamond", serif; font-size: clamp(32px,5vw,54px); line-height: 1; margin: 8px 0; }
+    h1 em { color: var(--gold-2); font-style: italic; }
+    .hero-copy { color: rgba(255,255,255,.66); max-width: 640px; line-height: 1.55; font-size: 14px; }
+
+    main { max-width: 1240px; margin: 0 auto; padding: 20px 18px 40px; }
+
+    /* ---------- KPIs ---------- */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi { border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 16px; box-shadow: 0 10px 26px rgba(13,27,62,.07);
+      position: relative; overflow: hidden; transition: transform .2s, box-shadow .2s; animation: riseIn .45s ease both; }
+    .kpi::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--gold); }
+    .kpi::after { content: ""; position: absolute; width: 84px; height: 84px; right: -38px; bottom: -40px; border-radius: 50%; background: rgba(201,168,76,.15); }
+    .kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow); background: #fffdf6; }
+    .kpi.active { background: #fffdf6; border-color: var(--gold); }
+    .kpi-label { color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+    .kpi-value { font-family: "Cormorant Garamond", serif; font-size: 38px; line-height: 1; margin-top: 6px; color: var(--navy); }
+    .kpi-sub { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+    @keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ---------- BANDS ---------- */
+    .band { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 16px; }
+    .band-head { padding: 15px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg,#fff,#fbfaf7); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .band-title { font-size: 18px; font-weight: 700; color: var(--navy); }
+    .band-sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+
+    /* faculty leaderboard */
+    .faculty-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 8px; padding: 14px 18px; }
+    .fac { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; transition: .15s; }
+    .fac:hover { border-color: var(--gold); background: #fffdf6; }
+    .fac.active { border-color: var(--gold); background: #fff7e2; }
+    .fac-rank { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted); width: 20px; }
+    .fac-name { flex: 1; font-size: 13px; font-weight: 500; }
+    .fac-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+    .fac-count { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--navy); font-weight: 500; min-width: 22px; text-align: right; }
+
+    /* toolbar */
+    .toolbar { padding: 13px 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); background: #fbfcfd; }
+    .toolbar .field { flex: 1; min-width: 150px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--gold); background: #fff7e2; color: var(--navy);
+      border-radius: 999px; padding: 5px 10px 5px 12px; font-size: 12px; font-weight: 600; }
+    .chip button { border: 0; background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
+
+    /* division sections */
+    .div-sec { border-top: 1px solid var(--line); }
+    .div-head { position: sticky; top: 82px; z-index: 5; padding: 12px 18px; background: linear-gradient(90deg, var(--navy), var(--navy-2)); color: #fff;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .div-badge { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: var(--gold); color: var(--navy);
+      font-family: "Cormorant Garamond", serif; font-weight: 700; font-size: 20px; flex: none; }
+    .div-title { font-weight: 700; font-size: 15px; }
+    .div-fac { color: rgba(255,255,255,.6); font-size: 11.5px; }
+    .div-count { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--gold-2); }
+    .year-head { padding: 8px 18px; background: #f3f1ea; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    th { color: var(--muted); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; background: #f7f9fb; font-weight: 700; }
+    tbody tr:hover { background: #fbfcfd; }
+    .thumb { width: 64px; height: 44px; border-radius: 6px; object-fit: cover; background: linear-gradient(135deg,var(--navy),var(--navy-2)); border: 1px solid var(--line); display: block; }
+    .cell-fac { color: var(--muted); font-size: 12px; }
+    .cell-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; background: var(--wash); color: var(--blue); }
+    .cmt-badge { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted); }
+    .cmt-badge.has { color: var(--gold); font-weight: 600; }
+    .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+    /* ---------- LIGHTBOX ---------- */
+    .lb { position: fixed; inset: 0; z-index: 70; display: none; background: rgba(8,14,32,.92); backdrop-filter: blur(6px); }
+    .lb.show { display: grid; grid-template-columns: minmax(0,1fr) 340px; }
+    .lb-stage { position: relative; display: grid; place-items: center; padding: 24px; overflow: hidden; }
+    .lb-img { max-width: 100%; max-height: 88vh; border-radius: 8px; box-shadow: 0 30px 80px rgba(0,0,0,.5); user-select: none; -webkit-user-drag: none; }
+    .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+      color: #fff; width: 44px; height: 44px; border-radius: 50%; font-size: 20px; display: grid; place-items: center; }
+    .lb-nav:hover { background: rgba(201,168,76,.3); }
+    .lb-prev { left: 18px; } .lb-next { right: 18px; }
+    .lb-close { position: absolute; top: 16px; left: 18px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+    .lb-side { background: var(--paper); border-left: 1px solid var(--line); display: flex; flex-direction: column; height: 100vh; }
+    .lb-meta { padding: 18px; border-bottom: 1px solid var(--line); }
+    .lb-div { display: flex; align-items: center; gap: 10px; }
+    .lb-div .div-badge { background: var(--navy); color: var(--gold-2); }
+    .lb-h { font-family: "Cormorant Garamond", serif; font-size: 24px; color: var(--navy); line-height: 1; }
+    .lb-facline { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+    .lb-info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 12px; font-size: 12.5px; }
+    .lb-info dt { color: var(--muted); } .lb-info dd { margin: 0; color: var(--ink); }
+    .lb-info .mono { font-family: "JetBrains Mono", monospace; font-size: 11.5px; }
+
+    .cmts { flex: 1; overflow-y: auto; padding: 14px 18px; }
+    .cmts-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .cmt { padding: 10px 0; border-bottom: 1px dashed var(--line); animation: riseIn .3s ease both; }
+    .cmt-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .cmt-author { font-weight: 600; color: var(--navy); font-size: 13.5px; }
+    .cmt-time { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--muted); }
+    .cmt-text { font-size: 14px; line-height: 1.5; color: var(--ink); margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+    .cmt-del { border: 0; background: none; color: var(--red); font-size: 11px; cursor: pointer; margin-top: 4px; padding: 0; }
+    .cmt-empty { color: var(--muted); font-size: 13px; font-style: italic; }
+    .cmt-form { border-top: 1px solid var(--line); padding: 12px 18px; background: #fbfcfd; }
+    .cmt-form textarea { resize: vertical; min-height: 46px; width: 100%; }
+    .cmt-form .row { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+    /* ---------- TOAST / FOOTER ---------- */
+    .toast-wrap { position: fixed; right: 16px; bottom: 72px; z-index: 90; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); }
+    .toast { border-radius: 8px; border: 1px solid var(--line); background: #fff; box-shadow: var(--shadow); padding: 12px 14px; display: grid; gap: 2px; animation: toastIn .25s ease both; }
+    .toast-title { font-weight: 800; color: var(--navy); font-size: 13px; }
+    .toast-body { color: var(--muted); font-size: 13px; }
+    .toast.error { border-left: 4px solid var(--red); } .toast.success { border-left: 4px solid var(--green); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; height: 56px; display: flex; align-items: center; justify-content: center; gap: 7px;
+      background: var(--navy); color: rgba(255,255,255,.68); border-top: 1px solid rgba(201,168,76,.24); font-size: 12px; padding: 0 12px; text-align: center; flex-wrap: wrap; }
+    .heart { color: #ff2f45; display: inline-block; animation: heartbeat 1.05s ease-in-out infinite; }
+    @keyframes heartbeat { 0%,100% { transform: scale(1); } 16% { transform: scale(1.28); } 30% { transform: scale(.94); } 44% { transform: scale(1.18); } 60% { transform: scale(1); } }
+    .footer .sep { opacity: .35; }
+
+    #confetti { position: fixed; inset: 0; z-index: 95; pointer-events: none; display: none; }
+
+    @media (max-width: 860px) {
+      .lb.show { grid-template-columns: 1fr; }
+      .lb-side { height: auto; max-height: 42vh; }
+      .lb-stage { max-height: 58vh; }
+    }
+    @media (max-width: 640px) {
+      .kpis { grid-template-columns: repeat(2,1fr); }
+      .div-head { top: 0; }
+      .table-scroll { overflow-x: auto; }
+      table { min-width: 620px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING -->
+  <div class="loading" id="loading">
+    <div class="loading-box">
+      <div class="loading-rings"><div class="loading-dot"></div></div>
+      <div class="loading-logo">KLE <span>Lens</span></div>
+      <div class="loading-text">Opening the archive</div>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-title">CEER <span>Lens</span></div>
+      <div class="login-copy">Sign in to browse Engineering Exploration photos by division, faculty and timeline.</div>
+      <input class="field" id="loginName" placeholder="username" autocomplete="username" />
+      <input class="field" id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+      <div class="login-actions">
+        <div class="login-error" id="loginError"></div>
+        <button class="btn-gold" id="loginSubmit" type="button">Sign in</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="mark" id="brandMark">
+            <img id="brandLogo" src="assets/logo.png" alt="KLE"
+              onload="var m=document.getElementById('brandMark');m.classList.add('has-logo');if(this.naturalWidth/Math.max(1,this.naturalHeight)>1.6)m.classList.add('wide');"
+              onerror="this.remove()" />
+            <span>KLE</span>
+          </div>
+          <div>
+            <div class="brand-name">CEER Lens</div>
+            <div class="brand-sub">Engineering Exploration · Photo Portal</div>
+          </div>
+        </div>
+        <div class="who">
+          <span>Hi, <b id="whoName">—</b></span>
+          <span class="role" id="whoRole">viewer</span>
+          <button id="btnRefresh" title="Re-scan Drive">↻ Refresh</button>
+          <button id="btnLogout">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="eyebrow">KLE-C-SHInE, Hubballi · Project Clinic</div>
+        <h1>The <em>Lens</em> Archive</h1>
+        <div class="hero-copy">Every session captured — automatically sorted by division, academic year and date, and credited to the faculty who ran it.</div>
+      </div>
+    </section>
+
+    <main>
+      <div class="kpis" id="kpis"></div>
+
+      <!-- FACULTY LEADERBOARD -->
+      <div class="band">
+        <div class="band-head">
+          <div>
+            <div class="band-title">👩‍🏫 Faculty Leaderboard</div>
+            <div class="band-sub">Photo appearances across each faculty's divisions · click a name to filter</div>
+          </div>
+        </div>
+        <div class="faculty-grid" id="facultyGrid"></div>
+      </div>
+
+      <!-- GALLERY -->
+      <div class="band">
+        <div class="band-head">
+          <div>
+            <div class="band-title">🖼️ Gallery</div>
+            <div class="band-sub">Grouped by Division → Academic Year → Date</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <input class="field" id="search" placeholder="Search division, faculty, LHC, date…" />
+          <select class="field" id="fltDivision"><option value="">All divisions</option></select>
+          <select class="field" id="fltLhc"><option value="">All LHCs</option></select>
+          <select class="field" id="fltYear"><option value="">All years</option></select>
+        </div>
+        <div id="activeFilters" style="padding:0 18px;"></div>
+        <div id="gallery"></div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Made with</span><span class="heart">❤</span><span>~rhc</span>
+      <span class="sep">·</span><span>Project Clinic, KLE-C-SHInE</span>
+      <span class="sep">·</span><span id="footInfo">—</span>
+    </footer>
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div class="lb" id="lb">
+    <div class="lb-stage">
+      <button class="lb-close" id="lbClose">✕ Close</button>
+      <button class="lb-nav lb-prev" id="lbPrev">‹</button>
+      <img class="lb-img" id="lbImg" alt="" draggable="false" />
+      <button class="lb-nav lb-next" id="lbNext">›</button>
+    </div>
+    <aside class="lb-side">
+      <div class="lb-meta">
+        <div class="lb-div"><div class="div-badge" id="lbBadge">?</div>
+          <div><div class="lb-h" id="lbDiv">Division</div><div class="lb-facline" id="lbFac"></div></div>
+        </div>
+        <dl class="lb-info">
+          <dt>LHC</dt><dd id="lbLhc">—</dd>
+          <dt>Session</dt><dd id="lbSession">—</dd>
+          <dt>Date</dt><dd class="mono" id="lbDate">—</dd>
+          <dt>Source</dt><dd id="lbSource">—</dd>
+        </dl>
+      </div>
+      <div class="cmts" id="cmts"><div class="cmt-empty">Loading comments…</div></div>
+      <div class="cmt-form">
+        <textarea class="field" id="cmtText" placeholder="Add a comment…" maxlength="1000"></textarea>
+        <div class="row"><button class="btn-gold" id="cmtSend">Post</button></div>
+      </div>
+    </aside>
+  </div>
+
+  <canvas id="confetti"></canvas>
+  <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+  <script>
+  /* ======================================================================
+     CONFIG — paste your deployed GAS Web App URL below.
+     Leave '' to run in MOCK mode (sample data, any login works).
+  ====================================================================== */
+  const GAS_URL = '';
+  const MOCK = !GAS_URL;
+
+  const state = { token: null, name: null, role: 'viewer', photos: [], divisions: {},
+                  filter: { division: '', lhc: '', year: '', faculty: '', q: '' },
+                  view: [], lbIndex: -1 };
+  const imgCache = {};
+
+  /* ---------------- GAS / JSONP ---------------- */
+  function callGAS(action, params = {}) {
+    return new Promise((resolve) => {
+      const cb = 'cb_' + Math.random().toString(36).slice(2);
+      const s = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); resolve({ success: false, error: 'timeout' }); }, 30000);
+      function cleanup() { clearTimeout(timer); delete window[cb]; if (s.parentNode) s.remove(); }
+      window[cb] = (d) => { cleanup(); resolve(d); };
+      const qs = new URLSearchParams({ action, callback: cb, ...params });
+      s.src = GAS_URL + '?' + qs.toString();
+      s.onerror = () => { cleanup(); resolve({ success: false, error: 'network' }); };
+      document.body.appendChild(s);
+    });
+  }
+
+  /* ---------------- LOGIN ---------------- */
+  function showLogin() {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('loginScreen').classList.add('show');
+    document.getElementById('loginName').focus();
+  }
+  async function doLogin() {
+    const name = document.getElementById('loginName').value.trim();
+    const pw = document.getElementById('loginPassword').value;
+    const err = document.getElementById('loginError');
+    if (!name || !pw) { err.textContent = 'Enter username and password.'; return; }
+    err.textContent = 'Checking…';
+    let res;
+    if (MOCK) { res = { success: true, token: 'mock', name: name, role: name.toLowerCase() === 'admin' ? 'admin' : 'viewer' }; }
+    else { res = await callGAS('login', { name, password: pw }); }
+    if (!res.success) { err.textContent = res.error === 'wrong password' ? 'Wrong password.' : (res.error === 'unknown user' ? 'Unknown user.' : 'Sign-in failed.'); return; }
+    state.token = res.token; state.name = res.name || name; state.role = res.role || 'viewer';
+    document.getElementById('loginScreen').classList.remove('show');
+    document.getElementById('app').classList.add('show');
+    document.getElementById('whoName').textContent = state.name;
+    document.getElementById('whoRole').textContent = state.role;
+    await loadIndex(false);
+  }
+
+  /* ---------------- INDEX ---------------- */
+  async function loadIndex(refresh) {
+    const load = document.getElementById('loading');
+    load.classList.remove('hidden');
+    let res;
+    if (MOCK) { res = mockIndex(); }
+    else { res = await callGAS('index', { token: state.token, refresh: refresh ? '1' : '0' }); }
+    if (!res.success) { toast('Could not load photos', res.error || '', 'error'); load.classList.add('hidden'); return; }
+    state.photos = res.photos || [];
+    state.divisions = res.divisions || {};
+    state.role = res.role || state.role;
+    buildFilters(); renderKPIs(); renderFaculty(); renderGallery();
+    document.getElementById('footInfo').textContent = state.photos.length + ' photos · updated ' + new Date(res.generatedAt || Date.now()).toLocaleString();
+    setTimeout(() => load.classList.add('hidden'), 350);
+  }
+
+  /* ---------------- FILTERS ---------------- */
+  function buildFilters() {
+    const divs = [...new Set(state.photos.map(p => p.division))].sort();
+    const lhcs = [...new Set(state.photos.map(p => p.lhc))].sort();
+    const years = [...new Set(state.photos.map(p => p.academicYear))].sort().reverse();
+    fill('fltDivision', divs, 'All divisions');
+    fill('fltLhc', lhcs, 'All LHCs');
+    fill('fltYear', years, 'All years');
+  }
+  function fill(id, arr, allLabel) {
+    const el = document.getElementById(id); const cur = el.value;
+    el.innerHTML = '<option value="">' + allLabel + '</option>' + arr.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    el.value = cur;
+  }
+  function applyFilters() {
+    const f = state.filter;
+    return state.photos.filter(p => {
+      if (f.division && p.division !== f.division) return false;
+      if (f.lhc && p.lhc !== f.lhc) return false;
+      if (f.year && p.academicYear !== f.year) return false;
+      if (f.faculty && !(p.faculty || []).includes(f.faculty)) return false;
+      if (f.q) {
+        const hay = (p.division + ' ' + p.lhc + ' ' + p.academicYear + ' ' + p.session + ' ' + (p.faculty || []).join(' ') + ' ' + fmtDate(p.takenISO)).toLowerCase();
+        if (!hay.includes(f.q.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }
+
+  /* ---------------- KPIs ---------------- */
+  function renderKPIs() {
+    const P = state.photos;
+    const divs = new Set(P.filter(p => !p.isEvent).map(p => p.division));
+    const lhcs = new Set(P.map(p => p.lhc));
+    const years = new Set(P.map(p => p.academicYear));
+    const events = P.filter(p => p.isEvent).length;
+    const latest = P.reduce((m, p) => p.takenISO > m ? p.takenISO : m, '');
+    const tiles = [
+      { label: '📸 Total Photos', value: P.length, sub: 'across all folders', act: () => clearFilters() },
+      { label: '🎓 Divisions', value: divs.size, sub: 'distinct divisions', act: null },
+      { label: '🏢 LHCs', value: lhcs.size, sub: [...lhcs].join(' · '), act: null },
+      { label: '🗓️ Academic Years', value: years.size, sub: [...years].sort().reverse().join(' · '), act: null },
+      { label: '🎉 Events', value: events, sub: 'misc / events', act: () => setFilter('division', 'Events') },
+      { label: '🕑 Latest', value: latest ? fmtDate(latest).split(',')[0] : '—', sub: 'most recent capture', act: null }
+    ];
+    document.getElementById('kpis').innerHTML = tiles.map((t, i) =>
+      `<div class="kpi" data-i="${i}" style="animation-delay:${i * 40}ms">
+        <div class="kpi-label">${t.label}</div><div class="kpi-value">${esc(String(t.value))}</div>
+        <div class="kpi-sub">${esc(t.sub)}</div></div>`).join('');
+    [...document.querySelectorAll('#kpis .kpi')].forEach((el, i) => { if (tiles[i].act) el.onclick = tiles[i].act; });
+  }
+
+  /* ---------------- FACULTY ---------------- */
+  function renderFaculty() {
+    const counts = {};
+    state.photos.forEach(p => (p.faculty || []).forEach(f => counts[f] = (counts[f] || 0) + 1));
+    const list = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const max = list.length ? list[0][1] : 1;
+    const grid = document.getElementById('facultyGrid');
+    if (!list.length) { grid.innerHTML = '<div class="empty" style="padding:8px">No faculty-linked photos yet.</div>'; return; }
+    grid.innerHTML = list.map(([name, n], i) =>
+      `<div class="fac${state.filter.faculty === name ? ' active' : ''}" data-fac="${esc(name)}">
+        <span class="fac-rank">${i + 1}</span>
+        <span class="fac-name">${esc(name)}</span>
+        <span class="fac-bar" style="width:${Math.max(14, Math.round(n / max * 90))}px"></span>
+        <span class="fac-count">${n}</span></div>`).join('');
+    [...grid.querySelectorAll('.fac')].forEach(el => el.onclick = () => {
+      const f = el.getAttribute('data-fac');
+      setFilter('faculty', state.filter.faculty === f ? '' : f);
+    });
+  }
+
+  /* ---------------- GALLERY (Division → Year → Date) ---------------- */
+  function renderGallery() {
+    const view = applyFilters();
+    state.view = view;
+    renderActiveFilters();
+    const host = document.getElementById('gallery');
+    if (!view.length) { host.innerHTML = '<div class="empty">No photos match these filters.</div>'; return; }
+
+    // group by division
+    const byDiv = {};
+    view.forEach(p => (byDiv[p.division] = byDiv[p.division] || []).push(p));
+    const divOrder = Object.keys(byDiv).sort((a, b) => (a === 'Events') - (b === 'Events') || a.localeCompare(b));
+
+    let html = '';
+    divOrder.forEach(div => {
+      const items = byDiv[div];
+      const fac = (state.divisions[div] || []).join(', ');
+      html += `<div class="div-sec"><div class="div-head">
+        <div class="div-badge">${esc(div === 'Events' ? '★' : div[0] || '?')}</div>
+        <div><div class="div-title">${div === 'Events' ? 'Events / Miscellaneous' : 'Division ' + esc(div)}</div>
+        <div class="div-fac">${esc(fac || (div === 'Events' ? 'no division' : '—'))}</div></div>
+        <div class="div-count">${items.length} photo${items.length > 1 ? 's' : ''}</div></div>`;
+
+      // group by year desc, sort by date desc
+      const byYear = {};
+      items.forEach(p => (byYear[p.academicYear] = byYear[p.academicYear] || []).push(p));
+      Object.keys(byYear).sort().reverse().forEach(year => {
+        const rows = byYear[year].sort((a, b) => (b.takenISO || '').localeCompare(a.takenISO || ''));
+        html += `<div class="year-head">${esc(year)}</div><div class="table-scroll"><table><thead><tr>
+          <th>Photo</th><th>Date &amp; time</th><th>LHC</th><th>Session</th><th>Faculty</th><th>💬</th></tr></thead><tbody>`;
+        rows.forEach(p => {
+          const gi = view.indexOf(p);
+          html += `<tr data-gi="${gi}">
+            <td><img class="thumb" data-id="${esc(p.fileId)}" alt=""></td>
+            <td class="mono" style="font-family:'JetBrains Mono',monospace;font-size:11.5px">${esc(fmtDate(p.takenISO))}</td>
+            <td><span class="cell-badge">${esc(p.lhc)}</span></td>
+            <td>${esc(p.session || '—')}</td>
+            <td class="cell-fac">${esc((p.faculty || []).join(', ') || '—')}</td>
+            <td class="cmt-badge${p.comments ? ' has' : ''}">${p.comments ? '💬 ' + p.comments : '—'}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+      });
+      html += '</div>';
+    });
+    host.innerHTML = html;
+
+    // row click → lightbox
+    [...host.querySelectorAll('tr[data-gi]')].forEach(tr => tr.onclick = () => openLightbox(+tr.getAttribute('data-gi')));
+    lazyLoadThumbs();
+  }
+
+  function renderActiveFilters() {
+    const f = state.filter; const out = [];
+    const add = (k, label) => { if (f[k]) out.push(`<span class="chip">${label}: ${esc(f[k])} <button data-k="${k}">✕</button></span>`); };
+    add('division', 'Division'); add('lhc', 'LHC'); add('year', 'Year'); add('faculty', 'Faculty');
+    if (f.q) out.push(`<span class="chip">“${esc(f.q)}” <button data-k="q">✕</button></span>`);
+    const host = document.getElementById('activeFilters');
+    host.innerHTML = out.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 0">' + out.join('') + '</div>' : '';
+    [...host.querySelectorAll('button[data-k]')].forEach(b => b.onclick = () => setFilter(b.getAttribute('data-k'), ''));
+  }
+
+  function setFilter(key, val) {
+    state.filter[key] = val;
+    if (key === 'division') document.getElementById('fltDivision').value = val;
+    if (key === 'lhc') document.getElementById('fltLhc').value = val;
+    if (key === 'year') document.getElementById('fltYear').value = val;
+    renderFaculty(); renderGallery();
+  }
+  function clearFilters() {
+    state.filter = { division: '', lhc: '', year: '', faculty: '', q: '' };
+    ['fltDivision', 'fltLhc', 'fltYear', 'search'].forEach(id => document.getElementById(id).value = '');
+    renderFaculty(); renderGallery();
+  }
+
+  /* ---------------- IMAGE LOADING ---------------- */
+  async function fetchImg(id, size) {
+    const key = id + '@' + size;
+    if (imgCache[key]) return imgCache[key];
+    let uri;
+    if (MOCK) { uri = mockImg(id, size); }
+    else { const r = await callGAS('img', { token: state.token, id, size: String(size) }); uri = r.success ? r.dataUri : ''; }
+    imgCache[key] = uri; return uri;
+  }
+  function lazyLoadThumbs() {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(async e => {
+        if (!e.isIntersecting) return;
+        const img = e.target; io.unobserve(img);
+        const uri = await fetchImg(img.getAttribute('data-id'), 400);
+        if (uri) img.src = uri;
+      });
+    }, { rootMargin: '200px' });
+    [...document.querySelectorAll('.thumb[data-id]')].forEach(img => io.observe(img));
+  }
+
+  /* ---------------- LIGHTBOX ---------------- */
+  async function openLightbox(i) {
+    const p = state.view[i]; if (!p) return;
+    state.lbIndex = i;
+    const lb = document.getElementById('lb'); lb.classList.add('show');
+    document.getElementById('lbBadge').textContent = p.division === 'Events' ? '★' : (p.division[0] || '?');
+    document.getElementById('lbDiv').textContent = p.division === 'Events' ? 'Events' : 'Division ' + p.division;
+    document.getElementById('lbFac').textContent = (p.faculty || []).join(', ');
+    document.getElementById('lbLhc').textContent = p.lhc;
+    document.getElementById('lbSession').textContent = p.session || '—';
+    document.getElementById('lbDate').textContent = fmtDate(p.takenISO);
+    document.getElementById('lbSource').textContent = p.source === 'exif' ? 'Camera timestamp' : 'Upload date';
+    const img = document.getElementById('lbImg'); img.src = '';
+    fireConfetti();
+    const uri = await fetchImg(p.fileId, 1600); img.src = uri || mockImg(p.fileId, 1600);
+    loadComments(p.fileId);
+  }
+  function closeLightbox() { document.getElementById('lb').classList.remove('show'); state.lbIndex = -1; }
+  function lbStep(d) { const n = state.lbIndex + d; if (n >= 0 && n < state.view.length) openLightbox(n); }
+
+  /* ---------------- COMMENTS ---------------- */
+  async function loadComments(fileId) {
+    const box = document.getElementById('cmts'); box.innerHTML = '<div class="cmt-empty">Loading…</div>';
+    let res;
+    if (MOCK) { res = { success: true, comments: mockComments[fileId] || [], canDelete: state.role === 'admin' }; }
+    else { res = await callGAS('getComments', { token: state.token, id: fileId }); }
+    if (!res.success) { box.innerHTML = '<div class="cmt-empty">Could not load comments.</div>'; return; }
+    renderComments(fileId, res.comments || [], res.canDelete);
+  }
+  function renderComments(fileId, list, canDelete) {
+    const box = document.getElementById('cmts');
+    let html = '<div class="cmts-title">Comments · ' + list.length + '</div>';
+    if (!list.length) html += '<div class="cmt-empty">No comments yet. Be the first.</div>';
+    list.forEach(c => {
+      html += `<div class="cmt"><div class="cmt-h"><span class="cmt-author">${esc(c.author)}</span>
+        <span class="cmt-time">${esc(fmtDate(c.createdAt))}</span></div>
+        <div class="cmt-text">${esc(c.text)}</div>
+        ${canDelete ? `<button class="cmt-del" data-cid="${esc(c.id)}">delete</button>` : ''}</div>`;
+    });
+    box.innerHTML = html;
+    [...box.querySelectorAll('.cmt-del')].forEach(b => b.onclick = () => delComment(fileId, b.getAttribute('data-cid')));
+    box.scrollTop = box.scrollHeight;
+  }
+  async function sendComment() {
+    const p = state.view[state.lbIndex]; if (!p) return;
+    const ta = document.getElementById('cmtText'); const text = ta.value.trim();
+    if (!text) return;
+    ta.value = '';
+    if (MOCK) {
+      (mockComments[p.fileId] = mockComments[p.fileId] || []).push({ id: 'm' + Date.now(), author: state.name, text, createdAt: new Date().toISOString() });
+      p.comments = mockComments[p.fileId].length;
+      renderComments(p.fileId, mockComments[p.fileId], state.role === 'admin'); renderGallery(); toast('Comment posted', '', 'success'); return;
+    }
+    const res = await callGAS('addComment', { token: state.token, id: p.fileId, text });
+    if (res.success) { p.comments = (p.comments || 0) + 1; loadComments(p.fileId); renderGallery(); toast('Comment posted', '', 'success'); }
+    else toast('Could not post', res.error || '', 'error');
+  }
+  async function delComment(fileId, cid) {
+    if (MOCK) { mockComments[fileId] = (mockComments[fileId] || []).filter(c => c.id !== cid);
+      const p = state.view[state.lbIndex]; if (p) p.comments = mockComments[fileId].length;
+      renderComments(fileId, mockComments[fileId], true); renderGallery(); return; }
+    const res = await callGAS('delComment', { token: state.token, commentId: cid });
+    if (res.success) { const p = state.view[state.lbIndex]; if (p) p.comments = Math.max(0, (p.comments || 1) - 1); loadComments(fileId); renderGallery(); }
+    else toast('Delete failed', res.error || '', 'error');
+  }
+
+  /* ---------------- CONFETTI ---------------- */
+  const cvs = document.getElementById('confetti'); const ctx = cvs.getContext('2d');
+  let confParts = [], confRAF = null;
+  function sizeCanvas() { cvs.width = innerWidth; cvs.height = innerHeight; }
+  addEventListener('resize', sizeCanvas); sizeCanvas();
+  function fireConfetti() {
+    sizeCanvas(); cvs.style.display = 'block';
+    const colors = ['#c9a84c', '#ead282', '#226da8', '#1f7a4d', '#c24035', '#ffffff'];
+    const cx = innerWidth / 2, cy = innerHeight * 0.42;
+    for (let i = 0; i < 120; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 9;
+      confParts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4,
+        g: 0.16 + Math.random() * 0.12, s: 5 + Math.random() * 7, rot: Math.random() * 6.28,
+        vr: (Math.random() - 0.5) * 0.4, c: colors[i % colors.length], life: 90 + Math.random() * 40 });
+    }
+    if (!confRAF) confRAF = requestAnimationFrame(stepConfetti);
+  }
+  function stepConfetti() {
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    confParts.forEach(p => { p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life--;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c; ctx.globalAlpha = Math.max(0, p.life / 40);
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6); ctx.restore(); });
+    confParts = confParts.filter(p => p.life > 0 && p.y < cvs.height + 40);
+    if (confParts.length) { confRAF = requestAnimationFrame(stepConfetti); }
+    else { confRAF = null; cvs.style.display = 'none'; }
+  }
+  // occasional random celebratory burst while browsing
+  setInterval(() => { if (document.getElementById('app').classList.contains('show') && !document.getElementById('lb').classList.contains('show') && Math.random() < 0.25) fireConfetti(); }, 45000);
+
+  /* ---------------- HELPERS ---------------- */
+  function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+  function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d)) return String(iso);
+    return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  function toast(title, body, type) {
+    const el = document.createElement('div'); el.className = 'toast ' + (type || 'info');
+    el.innerHTML = '<div class="toast-title">' + esc(title) + '</div>' + (body ? '<div class="toast-body">' + esc(body) + '</div>' : '');
+    document.getElementById('toastWrap').appendChild(el); setTimeout(() => el.remove(), type === 'error' ? 6500 : 4200);
+  }
+
+  /* ---------------- MOCK DATA ---------------- */
+  const MOCK_DIVS = {
+    Q: ['Poornima Patil', 'Nandish Humbi', 'Shruti Meeshi'], S: ['Deepali Majjigi', 'Soumya Meti', 'Rakshita Pattar'],
+    U: ['Kaushik Mallibhat', 'Vijyalaxmi Shanbhag', 'Md. Sohel'], Z: ['Praveen Goggal', 'Ramesh K.', 'Poornima Patil'],
+    N: ['Deepa Betageri', 'Nandish Harti', 'Vinodkumar K.'], O: ['Nandish Harti', 'Ramesh K.', 'Rakshita Pattar'],
+    P: ['Sanjeev Kavale', 'K. Madhu Kumar', 'Rakshita Pattar'], V: ['Vinay Beelagi', 'Deepa Betageri', 'Md. Sohel'],
+    Y: ['Nandish Humbi', 'Vinodkumar K.', 'Shruti Meeshi'], R: ['Soumya Meti', 'Neelambika Patil', 'Vinodkumar K.'],
+    W: ['N. Akshaykumar', 'Ramesh K.', 'Md. Sohel'], X: ['K. Madhu Kumar', 'Praveen Goggal', 'Poornima Patil'],
+    T: ['Neelambika Patil', 'N. Akshaykumar', 'Vinay Beelagi']
+  };
+  const mockComments = {};
+  function mockIndex() {
+    const lhcs = ['LHC 103', 'LHC 203', 'LHC 303']; const divKeys = Object.keys(MOCK_DIVS);
+    const photos = []; const years = ['2025-26', '2026-27'];
+    for (let i = 0; i < 22; i++) {
+      const div = divKeys[i % divKeys.length]; const lhc = lhcs[i % 3];
+      const y = years[i % 2 === 0 ? 1 : (i % 5 === 0 ? 0 : 1)];
+      const mo = 1 + (i % 11); const day = 1 + (i * 3 % 27);
+      const yr = y === '2026-27' ? (mo >= 8 ? 2026 : 2027) : (mo >= 8 ? 2025 : 2026);
+      const iso = new Date(yr, mo, day, 9 + (i % 6), (i * 7) % 60).toISOString();
+      photos.push({ fileId: 'mock' + i, lhc, division: div, academicYear: y, takenISO: iso,
+        weekday: 'Monday', session: i % 2 ? 'Afternoon' : 'Morning', isEvent: false,
+        comments: i % 4 === 0 ? (i % 3) : 0, faculty: MOCK_DIVS[div], source: i % 3 ? 'exif' : 'uploaded' });
+    }
+    // a couple of events
+    photos.push({ fileId: 'ev0', lhc: 'Events', division: 'Events', academicYear: '2026-27', takenISO: new Date(2026, 8, 5, 15, 10).toISOString(), session: '', isEvent: true, comments: 2, faculty: [], source: 'exif' });
+    photos.push({ fileId: 'ev1', lhc: 'Events', division: 'Events', academicYear: '2026-27', takenISO: new Date(2026, 9, 2, 11, 0).toISOString(), session: '', isEvent: true, comments: 0, faculty: [], source: 'uploaded' });
+    mockComments['mock0'] = [{ id: 'c1', author: 'admin', text: 'Great turnout this session! 🎉', createdAt: new Date(2026, 8, 6).toISOString() }];
+    mockComments['ev0'] = [{ id: 'c2', author: 'Rakshita Pattar', text: 'Prize distribution moment.', createdAt: new Date(2026, 8, 6).toISOString() },
+      { id: 'c3', author: 'admin', text: 'Adding to the newsletter.', createdAt: new Date(2026, 8, 7).toISOString() }];
+    return { success: true, photos, divisions: MOCK_DIVS, role: state.role, generatedAt: new Date().toISOString() };
+  }
+  function mockImg(id, size) {
+    const pal = ['#0d1b3e', '#182b55', '#226da8', '#1f7a4d', '#7a3e1f', '#4a2a6a'];
+    const h = [...id].reduce((a, c) => a + c.charCodeAt(0), 0); const bg = pal[h % pal.length];
+    const label = id.startsWith('ev') ? '★ Event' : ('Div ' + (state.photos.find(p => p.fileId === id) || {}).division);
+    const w = size, hh = Math.round(size * 0.68);
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${hh}'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+      <stop offset='0' stop-color='${bg}'/><stop offset='1' stop-color='#c9a84c'/></linearGradient></defs>
+      <rect width='100%' height='100%' fill='url(#g)'/>
+      <text x='50%' y='52%' fill='rgba(255,255,255,.92)' font-family='Georgia' font-size='${Math.round(size / 12)}' text-anchor='middle'>${label}</text>
+      <text x='50%' y='68%' fill='rgba(255,255,255,.6)' font-family='monospace' font-size='${Math.round(size / 26)}' text-anchor='middle'>${id}</text></svg>`;
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  }
+
+  /* ---------------- WIRE UP ---------------- */
+  document.getElementById('loginSubmit').onclick = doLogin;
+  document.getElementById('loginPassword').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('loginName').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
+  document.getElementById('btnRefresh').onclick = () => loadIndex(true);
+  document.getElementById('btnLogout').onclick = () => location.reload();
+  document.getElementById('search').addEventListener('input', e => { state.filter.q = e.target.value; renderGallery(); });
+  document.getElementById('fltDivision').onchange = e => setFilter('division', e.target.value);
+  document.getElementById('fltLhc').onchange = e => setFilter('lhc', e.target.value);
+  document.getElementById('fltYear').onchange = e => setFilter('year', e.target.value);
+  document.getElementById('lbClose').onclick = closeLightbox;
+  document.getElementById('lbPrev').onclick = () => lbStep(-1);
+  document.getElementById('lbNext').onclick = () => lbStep(1);
+  document.getElementById('cmtSend').onclick = sendComment;
+  document.getElementById('lb').addEventListener('click', e => { if (e.target.id === 'lb') closeLightbox(); });
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('lb').classList.contains('show')) return;
+    if (e.key === 'Escape') closeLightbox(); if (e.key === 'ArrowLeft') lbStep(-1); if (e.key === 'ArrowRight') lbStep(1);
+  });
+  // discourage casual downloads (soft, not DRM)
+  document.getElementById('lbImg').addEventListener('contextmenu', e => e.preventDefault());
+
+  // boot
+  setTimeout(showLogin, 900);
+  </script>
+</body>
+</html>
