@@ -216,6 +216,22 @@
 
     #confetti { position: fixed; inset: 0; z-index: 95; pointer-events: none; display: none; }
 
+    /* upload modal */
+    .modal { position: fixed; inset: 0; z-index: 65; display: none; place-items: center; background: rgba(8,14,32,.55); backdrop-filter: blur(4px); padding: 20px; }
+    .modal.show { display: grid; }
+    .modal-card { width: min(470px,100%); background: var(--paper); border-radius: 12px; box-shadow: var(--shadow); padding: 26px; border: 1px solid var(--line); animation: riseIn .3s ease both; }
+    .modal-title { font-family: "Cormorant Garamond", serif; font-size: 27px; color: var(--navy); }
+    .modal-title span { color: var(--gold); font-style: italic; }
+    .modal-copy { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 14px; }
+    .ulbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 4px; }
+    .up-list { margin-top: 12px; display: grid; gap: 6px; max-height: 190px; overflow: auto; }
+    .up-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; }
+    .up-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .up-item .st { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted); }
+    .up-item.ok .st { color: var(--green); } .up-item.err .st { color: var(--red); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+    .btn-upload { border: 1px solid var(--gold) !important; background: var(--gold) !important; color: var(--navy) !important; font-weight: 700; }
+
     @media (max-width: 860px) {
       .lb.show { grid-template-columns: 1fr; }
       .lb-side { height: auto; max-height: 42vh; }
@@ -274,6 +290,7 @@
         <div class="who">
           <span>Hi, <b id="whoName">—</b></span>
           <span class="role" id="whoRole">viewer</span>
+          <button id="btnUpload" class="btn-upload" title="Upload photos">＋ Upload</button>
           <button id="btnRefresh" title="Re-scan Drive">↻ Refresh</button>
           <button id="btnLogout">Sign out</button>
         </div>
@@ -356,6 +373,23 @@
     </aside>
   </div>
 
+  <!-- UPLOAD MODAL -->
+  <div class="modal" id="uploadModal">
+    <div class="modal-card">
+      <div class="modal-title">Upload <span>photos</span></div>
+      <div class="modal-copy">Photos are saved to the selected room folder. Keep original camera files so the date, time &amp; division are detected automatically (WhatsApp copies lose that).</div>
+      <label class="ulbl" for="upTarget">Room folder</label>
+      <select class="field" id="upTarget"></select>
+      <label class="ulbl" for="upFiles">Choose photos</label>
+      <input class="field" id="upFiles" type="file" accept="image/*" multiple style="padding:8px" />
+      <div class="up-list" id="upList"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="upCancel" type="button">Close</button>
+        <button class="btn-gold" id="upSend" type="button">Upload</button>
+      </div>
+    </div>
+  </div>
+
   <canvas id="confetti"></canvas>
   <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
@@ -369,9 +403,10 @@
   const CONFETTI = false;   // set true to re-enable a celebratory burst on photo open
   const CARD_LIMIT = 12;    // thumbnails shown per session before a "+N more" button
 
-  const state = { token: null, name: null, role: 'viewer', photos: [], divisions: {},
+  const state = { token: null, name: null, role: 'viewer', scope: 'all', photos: [], divisions: {},
                   filter: { division: '', lhc: '', year: '', faculty: '', q: '' },
                   view: [], lbIndex: -1 };
+  const ALL_FOLDERS = ['LHC 103', 'LHC 203', 'LHC 303', 'Events'];
   const imgCache = {};
 
   /* ---------------- GAS / JSONP ---------------- */
@@ -402,10 +437,10 @@
     if (!name || !pw) { err.textContent = 'Enter username and password.'; return; }
     err.textContent = 'Checking…';
     let res;
-    if (MOCK) { res = { success: true, token: 'mock', name: name, role: name.toLowerCase() === 'admin' ? 'admin' : 'viewer' }; }
+    if (MOCK) { res = { success: true, token: 'mock', name: name, role: name.toLowerCase() === 'admin' ? 'admin' : 'viewer', scope: 'all' }; }
     else { res = await callGAS('login', { name, password: pw }); }
     if (!res.success) { err.textContent = res.error === 'wrong password' ? 'Wrong password.' : (res.error === 'unknown user' ? 'Unknown user.' : 'Sign-in failed.'); return; }
-    state.token = res.token; state.name = res.name || name; state.role = res.role || 'viewer';
+    state.token = res.token; state.name = res.name || name; state.role = res.role || 'viewer'; state.scope = res.scope || 'all';
     document.getElementById('loginScreen').classList.remove('show');
     document.getElementById('app').classList.add('show');
     document.getElementById('whoName').textContent = state.name;
@@ -784,12 +819,74 @@
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
   }
 
+  /* ---------------- UPLOAD ---------------- */
+  function allowedFolders() {
+    if (!state.scope || state.scope.toLowerCase() === 'all') return ALL_FOLDERS.slice();
+    const set = state.scope.split(',').map(s => s.trim().toLowerCase());
+    return ALL_FOLDERS.filter(f => set.includes(f.toLowerCase()));
+  }
+  function openUpload() {
+    const targets = allowedFolders();
+    if (!targets.length) { toast('No upload access', 'Your account has no writable folder.', 'error'); return; }
+    document.getElementById('upTarget').innerHTML = targets.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+    document.getElementById('upFiles').value = '';
+    document.getElementById('upList').innerHTML = '';
+    document.getElementById('uploadModal').classList.add('show');
+  }
+  function closeUpload() { document.getElementById('uploadModal').classList.remove('show'); }
+
+  function readFileB64(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result).replace(/^data:[^,]*,/, ''));
+      fr.onerror = reject; fr.readAsDataURL(file);
+    });
+  }
+  async function postGAS(body) {
+    const r = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    return r.json();
+  }
+  async function doUpload() {
+    const files = [...document.getElementById('upFiles').files];
+    const lhc = document.getElementById('upTarget').value;
+    if (!files.length) { toast('Pick at least one photo', '', 'error'); return; }
+    const listEl = document.getElementById('upList');
+    listEl.innerHTML = files.map((f, i) => `<div class="up-item" id="up-${i}"><span class="nm">${esc(f.name)}</span><span class="st">waiting…</span></div>`).join('');
+    document.getElementById('upSend').disabled = true;
+    let ok = 0;
+    for (let i = 0; i < files.length; i++) {
+      const row = document.getElementById('up-' + i); const st = row.querySelector('.st');
+      st.textContent = 'uploading…';
+      try {
+        const b64 = await readFileB64(files[i]);
+        let res;
+        if (MOCK) { await new Promise(r => setTimeout(r, 250)); res = { success: true }; mockAddPhoto(lhc, files[i]); }
+        else { res = await postGAS({ action: 'upload', token: state.token, lhc, filename: files[i].name, mimeType: files[i].type, dataBase64: b64 }); }
+        if (res.success) { row.classList.add('ok'); st.textContent = '✓ done'; ok++; }
+        else { row.classList.add('err'); st.textContent = res.error || 'failed'; }
+      } catch (e) { row.classList.add('err'); st.textContent = 'error'; }
+    }
+    document.getElementById('upSend').disabled = false;
+    toast(ok + ' of ' + files.length + ' uploaded', ok ? 'Refreshing gallery…' : 'Check errors above', ok ? 'success' : 'error');
+    if (ok) { if (MOCK) { buildFilters(); renderKPIs(); renderFaculty(); renderGallery(); setTimeout(closeUpload, 900); } else { await loadIndex(true); setTimeout(closeUpload, 300); } }
+  }
+  function mockAddPhoto(lhc, file) {
+    const isEv = lhc === 'Events';
+    state.photos.push({ fileId: 'up' + Date.now() + Math.random().toString(36).slice(2, 5), lhc,
+      division: isEv ? 'Events' : 'Unassigned', academicYear: '2026-27', takenISO: new Date().toISOString(),
+      session: isEv ? '' : 'Morning', isEvent: isEv, comments: 0, faculty: [], source: 'uploaded' });
+  }
+
   /* ---------------- WIRE UP ---------------- */
   document.getElementById('loginSubmit').onclick = doLogin;
   document.getElementById('loginPassword').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
   document.getElementById('loginName').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
   document.getElementById('btnRefresh').onclick = () => loadIndex(true);
   document.getElementById('btnLogout').onclick = () => location.reload();
+  document.getElementById('btnUpload').onclick = openUpload;
+  document.getElementById('upCancel').onclick = closeUpload;
+  document.getElementById('upSend').onclick = doUpload;
+  document.getElementById('uploadModal').addEventListener('click', e => { if (e.target.id === 'uploadModal') closeUpload(); });
   document.getElementById('search').addEventListener('input', e => { state.filter.q = e.target.value; renderGallery(); });
   document.getElementById('fltDivision').onchange = e => setFilter('division', e.target.value);
   document.getElementById('fltLhc').onchange = e => setFilter('lhc', e.target.value);
