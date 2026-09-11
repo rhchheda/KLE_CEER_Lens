@@ -151,6 +151,23 @@
     .cmt-badge.has { color: var(--gold); font-weight: 600; }
     .empty { padding: 40px; text-align: center; color: var(--muted); }
 
+    /* session albums */
+    .sess-wrap { padding: 8px 18px 16px; display: grid; gap: 12px; }
+    .sess-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; scroll-margin-top: 130px; }
+    .sess-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f7f9fb; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .sess-date { font-weight: 700; color: var(--navy); font-size: 13.5px; }
+    .sess-meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .sess-count { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted); }
+    .sess-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; padding: 10px; }
+    .ph { position: relative; aspect-ratio: 4/3; border-radius: 8px; overflow: hidden; cursor: pointer; border: 1px solid var(--line);
+      background: linear-gradient(135deg, var(--navy), var(--navy-2)); }
+    .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+    .ph:hover img { transform: scale(1.06); }
+    .ph .cmt-tag { position: absolute; top: 6px; right: 6px; background: rgba(13,27,62,.72); color: var(--gold-2);
+      border-radius: 999px; font-size: 10.5px; padding: 2px 7px; font-family: "JetBrains Mono", monospace; }
+    .ph .tstamp { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 8px 5px; font-size: 10.5px; color: #fff;
+      background: linear-gradient(180deg, transparent, rgba(13,27,62,.8)); font-family: "JetBrains Mono", monospace; }
+
     /* ---------- LIGHTBOX ---------- */
     .lb { position: fixed; inset: 0; z-index: 70; display: none; background: rgba(8,14,32,.92); backdrop-filter: blur(6px); }
     .lb.show { display: grid; grid-template-columns: minmax(0,1fr) 340px; }
@@ -244,8 +261,9 @@
         <div class="brand">
           <div class="mark" id="brandMark">
             <img id="brandLogo" src="assets/logo.png" alt="KLE"
-              onload="var m=document.getElementById('brandMark');m.classList.add('has-logo');if(this.naturalWidth/Math.max(1,this.naturalHeight)>1.6)m.classList.add('wide');"
-              onerror="this.remove()" />
+              data-fallback="https://raw.githubusercontent.com/rhchheda/KLE_CEER_Lab_Inventory_Audit/main/assets/KLE_Logo.png"
+              onload="var m=this.parentNode;m.classList.add('has-logo');if(this.naturalWidth/Math.max(1,this.naturalHeight)>1.6)m.classList.add('wide');"
+              onerror="if(this.dataset.fallback){var f=this.dataset.fallback;this.removeAttribute('data-fallback');this.src=f;}else{this.remove();}" />
             <span>KLE</span>
           </div>
           <div>
@@ -346,8 +364,10 @@
      CONFIG — paste your deployed GAS Web App URL below.
      Leave '' to run in MOCK mode (sample data, any login works).
   ====================================================================== */
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbywnlzMkAKAynEnj4roOu-0-6SZkvBhjKtMViubTL6cZ7T6AD5C322JSDnYx7IdxAig/exec';
+  const GAS_URL = '';
   const MOCK = !GAS_URL;
+  const CONFETTI = false;   // set true to re-enable a celebratory burst on photo open
+  const CARD_LIMIT = 12;    // thumbnails shown per session before a "+N more" button
 
   const state = { token: null, name: null, role: 'viewer', photos: [], divisions: {},
                   filter: { division: '', lhc: '', year: '', faculty: '', q: '' },
@@ -446,13 +466,14 @@
     const years = new Set(P.map(p => p.academicYear));
     const events = P.filter(p => p.isEvent).length;
     const latest = P.reduce((m, p) => p.takenISO > m ? p.takenISO : m, '');
+    const latestYear = [...years].sort().reverse()[0] || '';
     const tiles = [
-      { label: '📸 Total Photos', value: P.length, sub: 'across all folders', act: () => clearFilters() },
-      { label: '🎓 Divisions', value: divs.size, sub: 'distinct divisions', act: null },
-      { label: '🏢 LHCs', value: lhcs.size, sub: [...lhcs].join(' · '), act: null },
-      { label: '🗓️ Academic Years', value: years.size, sub: [...years].sort().reverse().join(' · '), act: null },
-      { label: '🎉 Events', value: events, sub: 'misc / events', act: () => setFilter('division', 'Events') },
-      { label: '🕑 Latest', value: latest ? fmtDate(latest).split(',')[0] : '—', sub: 'most recent capture', act: null }
+      { label: '📸 Total Photos', value: P.length, sub: 'view all sessions', act: () => { clearFilters(); scrollToGallery(); } },
+      { label: '🎓 Divisions', value: divs.size, sub: 'browse by division', act: () => { clearFilters(); scrollToGallery(); } },
+      { label: '🏢 LHCs', value: lhcs.size, sub: [...lhcs].join(' · '), act: () => { clearFilters(); scrollToGallery(); } },
+      { label: '🗓️ Academic Years', value: years.size, sub: 'latest: ' + (latestYear || '—'), act: () => { setFilter('year', latestYear); scrollToGallery(); } },
+      { label: '🎉 Events', value: events, sub: 'jump to events', act: () => { setFilter('division', 'Events'); scrollToGallery(); } },
+      { label: '🕑 Latest', value: latest ? fmtDate(latest).split(',')[0] : '—', sub: 'open newest photo', act: () => jumpLatest() }
     ];
     document.getElementById('kpis').innerHTML = tiles.map((t, i) =>
       `<div class="kpi" data-i="${i}" style="animation-delay:${i * 40}ms">
@@ -482,55 +503,83 @@
   }
 
   /* ---------------- GALLERY (Division → Year → Date) ---------------- */
+  function dayKey(iso) { const d = new Date(iso); return isNaN(d) ? '0000-00-00' : d.toISOString().slice(0, 10); }
+  function sessKey(p) { return dayKey(p.takenISO) + '|' + (p.session || '') + '|' + p.lhc; }
+
   function renderGallery() {
-    const view = applyFilters();
-    state.view = view;
+    const filtered = applyFilters();
     renderActiveFilters();
     const host = document.getElementById('gallery');
-    if (!view.length) { host.innerHTML = '<div class="empty">No photos match these filters.</div>'; return; }
+    if (!filtered.length) { host.innerHTML = '<div class="empty">No photos match these filters.</div>'; state.view = []; return; }
 
     // group by division
     const byDiv = {};
-    view.forEach(p => (byDiv[p.division] = byDiv[p.division] || []).push(p));
+    filtered.forEach(p => (byDiv[p.division] = byDiv[p.division] || []).push(p));
     const divOrder = Object.keys(byDiv).sort((a, b) => (a === 'Events') - (b === 'Events') || a.localeCompare(b));
 
+    const ordered = [];   // flat list in DISPLAY order → drives lightbox prev/next
     let html = '';
     divOrder.forEach(div => {
       const items = byDiv[div];
       const fac = (state.divisions[div] || []).join(', ');
-      html += `<div class="div-sec"><div class="div-head">
+      html += `<div class="div-sec" id="div-${esc(div)}"><div class="div-head">
         <div class="div-badge">${esc(div === 'Events' ? '★' : div[0] || '?')}</div>
         <div><div class="div-title">${div === 'Events' ? 'Events / Miscellaneous' : 'Division ' + esc(div)}</div>
         <div class="div-fac">${esc(fac || (div === 'Events' ? 'no division' : '—'))}</div></div>
         <div class="div-count">${items.length} photo${items.length > 1 ? 's' : ''}</div></div>`;
 
-      // group by year desc, sort by date desc
+      // year desc
       const byYear = {};
       items.forEach(p => (byYear[p.academicYear] = byYear[p.academicYear] || []).push(p));
       Object.keys(byYear).sort().reverse().forEach(year => {
-        const rows = byYear[year].sort((a, b) => (b.takenISO || '').localeCompare(a.takenISO || ''));
-        html += `<div class="year-head">${esc(year)}</div><div class="table-scroll"><table><thead><tr>
-          <th>Photo</th><th>Date &amp; time</th><th>LHC</th><th>Session</th><th>Faculty</th><th>💬</th></tr></thead><tbody>`;
-        rows.forEach(p => {
-          const gi = view.indexOf(p);
-          html += `<tr data-gi="${gi}">
-            <td><img class="thumb" data-id="${esc(p.fileId)}" alt=""></td>
-            <td class="mono" style="font-family:'JetBrains Mono',monospace;font-size:11.5px">${esc(fmtDate(p.takenISO))}</td>
-            <td><span class="cell-badge">${esc(p.lhc)}</span></td>
-            <td>${esc(p.session || '—')}</td>
-            <td class="cell-fac">${esc((p.faculty || []).join(', ') || '—')}</td>
-            <td class="cmt-badge${p.comments ? ' has' : ''}">${p.comments ? '💬 ' + p.comments : '—'}</td></tr>`;
+        html += `<div class="year-head">${esc(year)}</div><div class="sess-wrap">`;
+
+        // group into sessions (date + session + LHC), newest first
+        const bySess = {};
+        byYear[year].forEach(p => (bySess[sessKey(p)] = bySess[sessKey(p)] || []).push(p));
+        const sessOrder = Object.keys(bySess).sort().reverse();
+        sessOrder.forEach(sk => {
+          const ph = bySess[sk].sort((a, b) => (a.takenISO || '').localeCompare(b.takenISO || ''));
+          const first = ph[0];
+          const sessId = 'sess-' + slug(div + '-' + sk);
+          const label = first.isEvent ? 'Event' : (first.session || '—');
+          html += `<div class="sess-card" id="${sessId}">
+            <div class="sess-head">
+              <span class="sess-date">${esc(fmtDay(first.takenISO))}</span>
+              <span class="sess-meta"><span class="cell-badge">${esc(first.lhc)}</span>${first.isEvent ? '' : '<span>· ' + esc(label) + '</span>'}</span>
+              <span class="sess-count">${ph.length} photo${ph.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="sess-grid">`;
+          ph.forEach((p, idx) => {
+            const gi = ordered.length; ordered.push(p);
+            const hide = idx >= CARD_LIMIT ? ' hidden' : '';
+            html += `<div class="ph" data-gi="${gi}"${hide}>
+              <img data-id="${esc(p.fileId)}" alt="">
+              ${p.comments ? `<span class="cmt-tag">💬 ${p.comments}</span>` : ''}
+              <span class="tstamp">${esc(fmtTime(p.takenISO))}</span></div>`;
+          });
+          html += '</div>';
+          if (ph.length > CARD_LIMIT)
+            html += `<div style="padding:0 10px 12px"><button class="btn-ghost sess-more" data-card="${sessId}">+${ph.length - CARD_LIMIT} more photo${ph.length - CARD_LIMIT > 1 ? 's' : ''}</button></div>`;
+          html += '</div>';
         });
-        html += '</tbody></table></div>';
+        html += '</div>';
       });
       html += '</div>';
     });
     host.innerHTML = html;
+    state.view = ordered;
 
-    // row click → lightbox
-    [...host.querySelectorAll('tr[data-gi]')].forEach(tr => tr.onclick = () => openLightbox(+tr.getAttribute('data-gi')));
+    [...host.querySelectorAll('.ph[data-gi]')].forEach(el => el.onclick = () => openLightbox(+el.getAttribute('data-gi')));
+    [...host.querySelectorAll('.sess-more')].forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      const card = document.getElementById(b.getAttribute('data-card'));
+      [...card.querySelectorAll('.ph[hidden]')].forEach(el => el.hidden = false);
+      b.remove(); lazyLoadThumbs();
+    });
     lazyLoadThumbs();
   }
+  function slug(s) { return String(s).replace(/[^a-z0-9]+/gi, '-'); }
 
   function renderActiveFilters() {
     const f = state.filter; const out = [];
@@ -573,7 +622,7 @@
         if (uri) img.src = uri;
       });
     }, { rootMargin: '200px' });
-    [...document.querySelectorAll('.thumb[data-id]')].forEach(img => io.observe(img));
+    [...document.querySelectorAll('img[data-id]')].forEach(img => io.observe(img));
   }
 
   /* ---------------- LIGHTBOX ---------------- */
@@ -589,7 +638,7 @@
     document.getElementById('lbDate').textContent = fmtDate(p.takenISO);
     document.getElementById('lbSource').textContent = p.source === 'exif' ? 'Camera timestamp' : 'Upload date';
     const img = document.getElementById('lbImg'); img.src = '';
-    fireConfetti();
+    if (CONFETTI) fireConfetti();
     const uri = await fetchImg(p.fileId, 1600); img.src = uri || mockImg(p.fileId, 1600);
     loadComments(p.fileId);
   }
@@ -668,13 +717,21 @@
     if (confParts.length) { confRAF = requestAnimationFrame(stepConfetti); }
     else { confRAF = null; cvs.style.display = 'none'; }
   }
-  // occasional random celebratory burst while browsing
-  setInterval(() => { if (document.getElementById('app').classList.contains('show') && !document.getElementById('lb').classList.contains('show') && Math.random() < 0.25) fireConfetti(); }, 45000);
 
   /* ---------------- HELPERS ---------------- */
   function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
   function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d)) return String(iso);
     return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  function fmtDay(iso) { const d = new Date(iso); if (isNaN(d)) return String(iso);
+    return d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }); }
+  function fmtTime(iso) { const d = new Date(iso); if (isNaN(d)) return ''; return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
+  function scrollToGallery() { document.getElementById('gallery').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function jumpLatest() {
+    clearFilters();
+    if (!state.view.length) return;
+    let li = 0; for (let i = 1; i < state.view.length; i++) if ((state.view[i].takenISO || '') > (state.view[li].takenISO || '')) li = i;
+    openLightbox(li);
+  }
   function toast(title, body, type) {
     const el = document.createElement('div'); el.className = 'toast ' + (type || 'info');
     el.innerHTML = '<div class="toast-title">' + esc(title) + '</div>' + (body ? '<div class="toast-body">' + esc(body) + '</div>' : '');
